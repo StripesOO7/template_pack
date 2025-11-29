@@ -22,6 +22,7 @@ ScriptHost:LoadScript("scripts/logic/logic.lua")
 ScriptHost:LoadScript("scripts/custom_items/class.lua")
 ScriptHost:LoadScript("scripts/custom_items/progressiveTogglePlus.lua")
 ScriptHost:LoadScript("scripts/custom_items/progressiveTogglePlusWrapper.lua")
+ScriptHost:LoadScript("scripts/custom_items/manual_marked_storage.lua")
 
 -- Items
 Tracker:AddItems("items/items.jsonc")
@@ -42,3 +43,5 @@ Tracker:AddLayouts("layouts/broadcast.jsonc")
 if PopVersion and PopVersion >= "0.18.0" then
     ScriptHost:LoadScript("scripts/autotracking.lua")
 end
+
+ScriptHost:AddOnLocationSectionChangedHandler("location_section_change_handler", LocationHandler)

@@ -22,6 +22,11 @@ CUR_INDEX = -1
 LOCAL_ITEMS = {}
 GLOBAL_ITEMS = {}
 
+ALL_LOCATIONS = {}
+
+MANUAL_CHECKED = true
+ROOM_SEED = "default"
+
 -- gets the data storage key for hints for the current player
 -- returns nil when not connected to AP
 function getHintDataStorageKey()
@@ -104,6 +109,40 @@ function apply_slot_data(slot_data)
 	-- put any code here that slot_data should affect (toggling setting items for example)
 end
 
+function preOnClear()
+    PLAYER_ID = Archipelago.PlayerNumber or -1
+	TEAM_NUMBER = Archipelago.TeamNumber or 0
+    if Archipelago.PlayerNumber > -1 then
+        if #ALL_LOCATIONS > 0 then
+            ALL_LOCATIONS = {}
+        end
+        for _, value in pairs(Archipelago.MissingLocations) do
+            table.insert(ALL_LOCATIONS, #ALL_LOCATIONS + 1, value)
+        end
+
+        for _, value in pairs(Archipelago.CheckedLocations) do
+            table.insert(ALL_LOCATIONS, #ALL_LOCATIONS + 1, value)
+        end
+    end
+
+    local custom_storage_item = Tracker:FindObjectForCode("manual_location_storage")
+    local seed_base = (Archipelago.Seed or tostring(#ALL_LOCATIONS)).."_"..Archipelago.TeamNumber.."_"..Archipelago.PlayerNumber
+    if ROOM_SEED == "default" or ROOM_SEED ~= seed_base then -- seed is default or from previous connection
+
+        ROOM_SEED = seed_base
+        if #custom_storage_item.ItemState.MANUAL_LOCATIONS > 10 then
+            custom_storage_item.ItemState.MANUAL_LOCATIONS[custom_storage_item.ItemState.MANUAL_LOCATIONS_ORDER[1]] = nil
+            table.remove(custom_storage_item.ItemState.MANUAL_LOCATIONS_ORDER, 1)
+        end
+        if custom_storage_item.ItemState.MANUAL_LOCATIONS[ROOM_SEED] == nil then
+            custom_storage_item.ItemState.MANUAL_LOCATIONS[ROOM_SEED] = {}
+            table.insert(custom_storage_item.ItemState.MANUAL_LOCATIONS_ORDER, ROOM_SEED)
+        end
+    else -- seed is from previous connection
+        -- do nothing
+    end
+end
+
 -- called right after an AP slot is connected
 function onClear(slot_data)
 	-- use bulk update to pause logic updates until we are done resetting all items/locations
@@ -111,6 +150,15 @@ function onClear(slot_data)
 	if AUTOTRACKER_ENABLE_DEBUG_LOGGING_AP then
 		print(string.format("called onClear, slot_data:\n%s", dump_table(slot_data)))
 	end
+
+	MANUAL_CHECKED = false
+    local custom_storage_item = Tracker:FindObjectForCode("manual_location_storage")
+    if custom_storage_item == nil then
+        CreateLuaManualLocationStorage("manual_location_storage")
+        custom_storage_item = Tracker:FindObjectForCode("manual_location_storage")
+    end
+    preOnClear()
+
 	CUR_INDEX = -1
 	-- reset locations
 	for _, mapping_entry in pairs(LOCATION_MAPPING) do
@@ -124,7 +172,11 @@ function onClear(slot_data)
 					if location_code:sub(1, 1) == "@" then
 						local obj = Tracker:FindObjectForCode(location_code)
 						if obj then
-							obj.AvailableChestCount = obj.ChestCount
+							if custom_storage_item.ItemState.MANUAL_LOCATIONS[ROOM_SEED][obj.FullID] then
+								obj.AvailableChestCount = custom_storage_item.ItemState.MANUAL_LOCATIONS[ROOM_SEED][obj.FullID]
+							else
+								obj.AvailableChestCount = obj.ChestCount
+							end
 							if obj.Highlight then
 								obj.Highlight = Highlight.None
 							end
@@ -178,6 +230,7 @@ function onClear(slot_data)
 	-- gets the current value for the data storage keys
 	-- triggers callback in the Retrieved handler when result is received
 	Archipelago:Get(data_strorage_keys)
+	MANUAL_CHECKED = true
 	Tracker.BulkUpdate = false
 end
 
@@ -237,10 +290,12 @@ function onItem(index, item_id, item_name, player_number)
 	if PopVersion < "0.20.1" or AutoTracker:GetConnectionState("SNES") == 3 then
 		-- add snes interface functions for local item tracking here
 	end
+	MANUAL_CHECKED = true
 end
 
 -- called when a location gets cleared
 function onLocation(location_id, location_name)
+	MANUAL_CHECKED = false
 	if AUTOTRACKER_ENABLE_DEBUG_LOGGING_AP then
 		print(string.format("called onLocation: %s, %s", location_id, location_name))
 	end
